@@ -1,0 +1,181 @@
+version: 3
+
+tasks:
+
+  global-vars:
+    vars:
+      dest: '{{ .dest | default "/dev/stdout" }}'
+    silent: true
+    cmds:
+      - |
+        cat <<EOF | op inject > {{ .dest }}
+        UP_E2E_SLACK_CHANNEL_ID=op://fspxybwwgq26s6agty4p6opiqy/y6kn7pllsimuvnxpwrygbedmki/channel-id
+        UP_E2E_TESTRAIL_USERNAME=op://fspxybwwgq26s6agty4p6opiqy/ajvukk2p2onlrvnoevuis2oeha/name     
+        UP_E2E_TESTRAIL_ENDPOINT=op://fspxybwwgq26s6agty4p6opiqy/ajvukk2p2onlrvnoevuis2oeha/endpoint
+        UP_E2E_TESTRAIL_RUN_ID=op://fspxybwwgq26s6agty4p6opiqy/ajvukk2p2onlrvnoevuis2oeha/run-id
+        EOF
+
+  global-secrets:
+    vars:
+      dest: '{{ .dest | default "/dev/stdout" }}'
+    silent: true
+    cmds:
+      - |
+        cat <<EOF | op inject > {{ .dest }}
+        UP_E2E_SLACK_TOKEN=op://fspxybwwgq26s6agty4p6opiqy/y6kn7pllsimuvnxpwrygbedmki/credential
+        UP_E2E_TESTRAIL_PASSWORD=op://fspxybwwgq26s6agty4p6opiqy/ajvukk2p2onlrvnoevuis2oeha/password
+        EOF
+
+  production-vars:
+    vars:
+      dest: '{{ .dest | default "/dev/stdout" }}'
+    silent: true
+    cmds:
+      - |
+        cat <<EOF | op inject > {{ .dest }}
+        UP_E2E_URL=op://fspxybwwgq26s6agty4p6opiqy/qoe2zfxsmsnzpji3pjgcmglvti/website
+        UP_E2E_USERNAME=op://fspxybwwgq26s6agty4p6opiqy/qoe2zfxsmsnzpji3pjgcmglvti/username
+        EOF
+
+  production-secrets:
+    vars:
+      dest: '{{ .dest | default "/dev/stdout" }}'
+    silent: true
+    cmds:
+      - |
+        cat <<EOF | op inject > {{ .dest }}
+        UP_E2E_PASSWORD=op://fspxybwwgq26s6agty4p6opiqy/qoe2zfxsmsnzpji3pjgcmglvti/password
+        UP_E2E_API_TOKEN=op://fspxybwwgq26s6agty4p6opiqy/qoe2zfxsmsnzpji3pjgcmglvti/api-token
+        EOF
+
+  staging-vars:
+    vars:
+      dest: '{{ .dest | default "/dev/stdout" }}'
+    silent: true
+    cmds:
+      - |
+        cat <<EOF | op inject > {{ .dest }}
+        UP_E2E_URL=op://fspxybwwgq26s6agty4p6opiqy/ua6trcuahds3yyff3wmyruhg3e/website                            
+        UP_E2E_USERNAME=op://fspxybwwgq26s6agty4p6opiqy/ua6trcuahds3yyff3wmyruhg3e/username                      
+        UP_E2E_HTTP_BASIC_USERNAME=op://fspxybwwgq26s6agty4p6opiqy/ua6trcuahds3yyff3wmyruhg3e/http-basic-username
+        EOF
+
+  staging-secrets:
+    vars:
+      dest: '{{ .dest | default "/dev/stdout" }}'
+    silent: true
+    cmds:
+      - |
+        cat <<EOF | op inject > {{ .dest }}
+        UP_E2E_PASSWORD=op://fspxybwwgq26s6agty4p6opiqy/ua6trcuahds3yyff3wmyruhg3e/password                      
+        UP_E2E_API_TOKEN=op://fspxybwwgq26s6agty4p6opiqy/ua6trcuahds3yyff3wmyruhg3e/api-token                    
+        UP_E2E_HTTP_BASIC_PASSWORD=op://fspxybwwgq26s6agty4p6opiqy/ua6trcuahds3yyff3wmyruhg3e/http-basic-password
+        EOF
+
+  dotenv:
+    internal: true
+    preconditions:
+      - sh:  test ! -e .env
+        msg: ".env already exists, remove to generate new one"
+    vars:
+      dest:
+        sh: mktemp
+    cmds:
+      - defer: rm -f {{ .dest }}
+      - task: global-vars
+        vars:
+          dest: '{{ .dest }}'
+      - cat {{ .dest }} >> .env
+      - task: global-secrets
+        vars:
+          dest: '{{ .dest }}'
+      - cat {{ .dest }} >> .env
+      - task: '{{ .environment }}-vars'
+        vars:
+          dest: '{{ .dest }}'
+      - cat {{ .dest }} >> .env
+      - task: '{{ .environment }}-secrets'
+        vars:
+          dest: '{{ .dest }}'
+      - cat {{ .dest }} >> .env
+
+  production-dotenv:
+    desc: "Generate .env file for production"
+    cmds:
+      - task: dotenv
+        vars:
+          environment: production
+
+  staging-dotenv:
+    desc: "Generate .env file for staging"
+    cmds:
+      - task: dotenv
+        vars:
+          environment: staging
+
+  clean:
+
+    desc: Clean up github secrets and variables
+
+    cmds:
+      - gh variable list | grep ^UP_E2E_ | cut -f1 | xargs -n1 gh variable delete
+      - gh variable list -e production | grep ^UP_E2E_ | cut -f1 | xargs -n1 gh variable delete -e production
+      - gh variable list -e staging | grep ^UP_E2E_ | cut -f1 | xargs -n1 gh variable delete -e staging
+      - gh secret list | grep ^UP_E2E_ | cut -f1 | xargs -n1 gh secret delete
+      - gh secret list -e production | grep ^UP_E2E_ | cut -f1 | xargs -n1 gh secret delete -e production
+      - gh secret list -e staging | grep ^UP_E2E_ | cut -f1 | xargs -n1 gh secret delete -e staging
+
+  populate:
+
+    desc: Populate github secrets and variables
+
+    vars:
+      dest:
+        sh: mktemp
+
+    cmds:
+      - defer: rm -f {{ .dest }}
+
+      - task: global-vars
+        vars:
+          dest: '{{ .dest }}'
+      - gh variable set -f {{ .dest }}
+
+      - task: global-secrets
+        vars:
+          dest: '{{ .dest }}'
+      - gh secret set -f {{ .dest }}
+
+      - task: production-vars
+        vars:
+          dest: '{{ .dest }}'
+      - gh variable set -e production -f {{ .dest }}
+
+      - task: production-secrets
+        vars:
+          dest: '{{ .dest }}'
+      - gh secret set -e production -f {{ .dest }}
+
+      - task: staging-vars
+        vars:
+          dest: '{{ .dest }}'
+      - gh variable set -e staging -f {{ .dest }}
+
+      - task: staging-secrets
+        vars:
+          dest: '{{ .dest }}'
+      - gh secret set -e staging -f {{ .dest }}
+
+  dispatch:
+    desc: Dispatch workflow run
+
+    cmds:
+      - gh workflow run e2e
+
+  watch:
+    desc:        Watch latest workflow run
+    interactive: true
+    cmds:
+      - |
+        ID=$(gh run list -w e2e --json databaseId -q '. | first | .databaseId')
+        gh run watch $ID
