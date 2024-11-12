@@ -1,0 +1,11 @@
+version: '3.11'
+
+services:
+  e2e:
+    container_name: e2e
+    image: ghcr.io/uptime-com/uptime/up-e2e:latest
+    build:
+      context: .
+    env_file:
+      - .env
+    restart: "no"
